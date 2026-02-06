@@ -15,14 +15,19 @@ type GameState = "MENU" | "PLAYING" | "GAMEOVER";
 export default function Game() {
   const [gameState, setGameState] = useState<GameState>("MENU");
   const [score, setScore] = useState(0);
-  const [highScore, setHighScore] = useState(0); // Local high score
+  const [highScore, setHighScore] = useState(0);
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [showSaveDialog, setShowSaveDialog] = useState(false);
   const [username, setUsername] = useState("");
+  const [gameOverCount, setGameOverCount] = useState(0);
+  const [showInterstitial, setShowInterstitial] = useState(false);
+  const [showRewarded, setShowRewarded] = useState(false);
+  const [revived, setRevived] = useState(false);
+  const [reviveTrigger, setReviveTrigger] = useState(0);
   
   const submitScoreMutation = useSubmitScore();
 
-  // Load high score from local storage
+  // Load high score
   useEffect(() => {
     const saved = localStorage.getItem("jump_high_score");
     if (saved) setHighScore(parseInt(saved));
@@ -31,11 +36,14 @@ export default function Game() {
   const handleStart = () => {
     setScore(0);
     setGameState("PLAYING");
+    setRevived(false);
   };
 
   const handleGameOver = (finalScore: number) => {
     setGameState("GAMEOVER");
     setScore(finalScore);
+    const newCount = gameOverCount + 1;
+    setGameOverCount(newCount);
     
     if (finalScore > highScore) {
       setHighScore(finalScore);
@@ -46,100 +54,104 @@ export default function Game() {
         origin: { y: 0.6 }
       });
       setShowSaveDialog(true);
-    } else if (finalScore > 0) {
-      // Prompt to save decent scores too? Let's just prompt for high scores or any score > 50
-      if (finalScore > 50) setShowSaveDialog(true);
     }
+  };
+
+  const handleReplay = () => {
+    if (gameOverCount % 2 === 0) {
+      setShowInterstitial(true);
+      setTimeout(() => {
+        setShowInterstitial(false);
+        handleStart();
+      }, 2000);
+    } else {
+      handleStart();
+    }
+  };
+
+  const handleContinue = () => {
+    setShowRewarded(true);
+    setTimeout(() => {
+      setShowRewarded(false);
+      setRevived(true);
+      setReviveTrigger(prev => prev + 1);
+      setGameState("PLAYING");
+    }, 2000);
   };
 
   const handleSaveScore = async () => {
     if (!username.trim()) return;
     try {
-      await submitScoreMutation.mutateAsync({ 
-        username: username, 
-        score: score 
-      });
+      await submitScoreMutation.mutateAsync({ username, score });
       setShowSaveDialog(false);
-    } catch (e) {
-      // Error handled by mutation
-    }
+    } catch (e) {}
   };
 
   return (
-    <div className="fixed inset-0 bg-slate-900 flex items-center justify-center p-0 font-sans overflow-hidden">
-      <div className="game-container bg-gradient-to-b from-sky-200 to-white flex flex-col relative h-full w-full">
+    <div className="fixed inset-0 bg-slate-900 flex items-center justify-center font-sans overflow-hidden select-none touch-none">
+      <div className="game-container bg-gradient-to-b from-sky-300 via-sky-100 to-white flex flex-col relative h-full w-full max-w-md shadow-2xl overflow-hidden">
         
-        {/* Header / HUD - Safe Area Aware */}
-        <div className="absolute top-0 left-0 right-0 z-20 p-4 pt-8 flex justify-between items-center pointer-events-none">
+        {/* Header / HUD */}
+        <div className="absolute top-0 left-0 right-0 z-20 p-6 pt-[calc(1.5rem+env(safe-area-inset-top))] flex justify-between items-center pointer-events-none">
           {gameState === "PLAYING" ? (
-             <div className="flex flex-col">
-               <span className="text-4xl font-black text-slate-800 drop-shadow-sm font-display">
+             <div className="flex flex-col bg-white/20 backdrop-blur-md px-4 py-2 rounded-2xl border border-white/30">
+               <span className="text-3xl font-black text-slate-800 font-display leading-none">
                  {score}
                </span>
-               <span className="text-xs font-bold text-slate-500 uppercase tracking-widest">Meters</span>
+               <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Score</span>
              </div>
-          ) : (
-             <div /> /* Spacer */
-          )}
+          ) : <div />}
           
           <button 
             onClick={() => setSoundEnabled(!soundEnabled)}
-            className="pointer-events-auto p-2 bg-white/50 backdrop-blur-sm rounded-full hover:bg-white transition-colors"
+            className="pointer-events-auto p-3 bg-white/80 backdrop-blur-sm rounded-full shadow-lg border border-white hover:scale-110 transition-transform active:scale-95"
           >
-            {soundEnabled ? <Volume2 className="w-6 h-6 text-slate-700"/> : <VolumeX className="w-6 h-6 text-slate-400"/>}
+            {soundEnabled ? <Volume2 className="w-6 h-6 text-sky-600"/> : <VolumeX className="w-6 h-6 text-slate-400"/>}
           </button>
         </div>
 
-        {/* Game Canvas Layer */}
-        <div className="flex-1 relative overflow-hidden flex flex-col justify-center items-center">
-          {/* Clouds Background Decoration */}
-          <div className="absolute top-20 left-10 text-white/40 animate-float pointer-events-none z-0">
-             <CloudIcon className="w-24 h-24" />
-          </div>
-          <div className="absolute top-40 right-10 text-white/30 animate-float pointer-events-none z-0" style={{animationDelay: "2s"}}>
-             <CloudIcon className="w-16 h-16" />
-          </div>
-
+        {/* Game Area */}
+        <div className="flex-1 relative overflow-hidden flex flex-col items-center">
           <GameCanvas 
             isPlaying={gameState === "PLAYING"} 
             onGameOver={handleGameOver}
             onScoreUpdate={setScore}
+            reviveTrigger={reviveTrigger}
           />
 
-          {/* MENUS OVERLAY */}
+          {/* Overlay Menus */}
           <AnimatePresence>
             {gameState === "MENU" && (
               <motion.div 
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
-                className="absolute inset-0 z-30 flex flex-col items-center justify-center bg-white/30 backdrop-blur-sm p-6 pb-32"
+                className="absolute inset-0 z-30 flex flex-col items-center justify-center bg-white/40 backdrop-blur-md p-6 pb-40"
               >
                 <motion.div 
-                  initial={{ y: 20, opacity: 0 }}
+                  initial={{ y: -50, opacity: 0 }}
                   animate={{ y: 0, opacity: 1 }}
-                  transition={{ delay: 0.2 }}
                   className="text-center mb-12"
                 >
-                  <h1 className="text-6xl text-primary font-black tracking-tight drop-shadow-md mb-2">
-                    JUMP<br/><span className="text-slate-800">UP!</span>
+                  <h1 className="text-7xl text-sky-600 font-black tracking-tighter drop-shadow-xl font-display mb-2">
+                    JUMP<br/><span className="text-slate-800">ONE!</span>
                   </h1>
-                  <p className="text-slate-600 font-medium">Tap & Hold to Move</p>
+                  <p className="text-slate-600 font-bold text-lg bg-white/50 px-4 py-1 rounded-full border border-white/50 inline-block">Tap to Jump</p>
                 </motion.div>
 
                 <motion.button
                   whileHover={{ scale: 1.05 }}
                   whileTap={{ scale: 0.95 }}
                   onClick={handleStart}
-                  className="btn-primary mb-6 shadow-xl"
+                  className="btn-primary mb-8 shadow-[0_10px_30px_rgba(14,165,233,0.4)] w-64 py-5 text-2xl rounded-3xl"
                 >
-                  <div className="flex items-center space-x-2">
-                    <Play className="fill-current w-6 h-6" />
-                    <span>Start Game</span>
+                  <div className="flex items-center justify-center space-x-3">
+                    <Play className="fill-current w-8 h-8" />
+                    <span className="font-black">PLAY NOW</span>
                   </div>
                 </motion.button>
                 
-                <div className="mt-8 flex-1 overflow-auto w-full max-h-[40vh]">
+                <div className="w-full max-h-[35vh] overflow-hidden rounded-2xl bg-white/50 border border-white shadow-inner">
                   <Leaderboard className="scale-90 origin-top" />
                 </div>
               </motion.div>
@@ -147,84 +159,121 @@ export default function Game() {
 
             {gameState === "GAMEOVER" && (
               <motion.div 
-                initial={{ opacity: 0, scale: 0.9 }}
-                animate={{ opacity: 1, scale: 1 }}
-                className="absolute inset-0 z-30 flex flex-col items-center justify-center bg-black/50 backdrop-blur-sm p-6 pb-32"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                className="absolute inset-0 z-30 flex flex-col items-center justify-center bg-slate-900/60 backdrop-blur-sm p-6 pb-40"
               >
-                <div className="bg-white rounded-3xl p-8 w-full max-w-sm text-center shadow-2xl border-4 border-slate-100">
-                  <h2 className="text-3xl font-bold text-slate-800 mb-2">Game Over!</h2>
+                <motion.div
+                  initial={{ scale: 0.8, y: 20 }}
+                  animate={{ scale: 1, y: 0 }}
+                  className="bg-white rounded-[40px] p-8 w-full max-w-sm text-center shadow-[0_20px_50px_rgba(0,0,0,0.3)] border-t-8 border-sky-400"
+                >
+                  <h2 className="text-4xl font-black text-slate-800 mb-6 font-display">Time Up!</h2>
                   
-                  <div className="bg-slate-50 rounded-2xl p-6 mb-6">
-                    <div className="text-sm text-slate-500 uppercase tracking-widest font-bold mb-1">Score</div>
-                    <div className="text-5xl font-black text-primary mb-4">{score}</div>
+                  <div className="bg-sky-50 rounded-3xl p-6 mb-8 border border-sky-100">
+                    <div className="text-xs text-sky-500 uppercase tracking-[0.2em] font-black mb-2">Final Score</div>
+                    <div className="text-6xl font-black text-sky-600 mb-4">{score}</div>
                     
-                    <div className="flex justify-between items-center border-t pt-4">
-                      <span className="text-slate-400 text-sm font-semibold">BEST</span>
-                      <span className="text-slate-700 font-bold text-lg">{highScore}</span>
+                    <div className="flex justify-between items-center bg-white rounded-2xl px-5 py-3 shadow-sm border border-sky-100">
+                      <span className="text-slate-400 text-xs font-black uppercase">Personal Best</span>
+                      <span className="text-sky-600 font-black text-xl">{highScore}</span>
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-4">
-                    <button onClick={handleStart} className="btn-primary flex items-center justify-center space-x-2 py-3 text-lg col-span-2">
-                      <RotateCcw className="w-5 h-5" />
-                      <span>Try Again</span>
+                  <div className="flex flex-col gap-4">
+                    {!revived && (
+                      <button
+                        onClick={handleContinue}
+                        className="bg-emerald-500 text-white w-full flex items-center justify-center space-x-3 py-4 rounded-3xl font-black shadow-lg shadow-emerald-100 border-b-4 border-emerald-700 active:border-b-0 active:translate-y-1 transition-all"
+                      >
+                        <Play className="w-5 h-5 fill-current" />
+                        <span>CONTINUE (AD)</span>
+                      </button>
+                    )}
+
+                    <button
+                      onClick={handleReplay}
+                      className="btn-primary w-full flex items-center justify-center space-x-3 py-5 text-xl rounded-3xl shadow-lg shadow-sky-200"
+                    >
+                      <RotateCcw className="w-6 h-6 stroke-[3px]" />
+                      <span className="font-black">REPLAY</span>
                     </button>
                     
-                    <button onClick={() => setGameState("MENU")} className="btn-secondary flex items-center justify-center col-span-2">
+                    <button
+                      onClick={() => setGameState("MENU")}
+                      className="bg-slate-100 text-slate-600 w-full flex items-center justify-center py-4 rounded-2xl font-black border border-slate-200 active:bg-slate-200 transition-colors"
+                    >
                       <Home className="w-5 h-5 mr-2" />
-                      <span>Main Menu</span>
+                      <span>EXIT MENU</span>
                     </button>
                   </div>
-                </div>
+                </motion.div>
               </motion.div>
             )}
           </AnimatePresence>
         </div>
 
-        {/* Ad Space - Always at bottom, dedicated container */}
+        {/* Ad Space - Mobile Safe Zone */}
         {(gameState === "MENU" || gameState === "GAMEOVER") && (
-          <div className="z-40 relative bg-white mt-auto pb-[env(safe-area-inset-bottom,0px)]">
+          <div className="mt-auto bg-white border-t border-slate-100 pb-[env(safe-area-inset-bottom,1rem)] pt-2 relative z-40 h-[100px] flex items-center">
             <BannerAd />
+          </div>
+        )}
+
+        {/* Interstitial Ad Simulator */}
+        {showInterstitial && (
+          <div className="absolute inset-0 z-50 bg-black flex flex-col items-center justify-center text-white">
+             <div className="animate-pulse flex flex-col items-center">
+                <div className="w-16 h-16 border-4 border-sky-500 border-t-transparent rounded-full animate-spin mb-4"></div>
+                <h3 className="text-xl font-bold">SPONSORED VIDEO</h3>
+                <p className="text-slate-400 text-sm">Ad ends in 2 seconds...</p>
+             </div>
+          </div>
+        )}
+
+        {/* Rewarded Ad Simulator */}
+        {showRewarded && (
+          <div className="absolute inset-0 z-50 bg-slate-900 flex flex-col items-center justify-center text-white p-10 text-center">
+             <div className="w-20 h-20 bg-emerald-500 rounded-3xl flex items-center justify-center mb-6 animate-bounce">
+                <Play className="w-10 h-10 fill-white" />
+             </div>
+             <h3 className="text-2xl font-black mb-2">REWARDED AD</h3>
+             <p className="text-slate-400">Watch to revive and keep your score!</p>
+             <div className="w-full bg-slate-800 h-2 mt-8 rounded-full overflow-hidden">
+                <div className="bg-emerald-500 h-full animate-progress-fast"></div>
+             </div>
           </div>
         )}
       </div>
 
       {/* Save Score Dialog */}
       <Dialog open={showSaveDialog} onOpenChange={setShowSaveDialog}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="sm:max-w-md rounded-[30px] border-none shadow-2xl">
           <DialogHeader>
-            <DialogTitle className="text-center text-2xl">New High Score! 🎉</DialogTitle>
+            <DialogTitle className="text-center text-3xl font-black font-display text-sky-600">New High Score! 🎉</DialogTitle>
           </DialogHeader>
-          <div className="flex flex-col space-y-4 py-4">
-            <div className="text-center">
-              <span className="text-4xl font-bold text-primary">{score}</span>
-              <p className="text-sm text-muted-foreground mt-2">Enter your name for the leaderboard</p>
+          <div className="flex flex-col space-y-6 py-4">
+            <div className="text-center bg-sky-50 rounded-3xl p-6 border border-sky-100">
+              <span className="text-6xl font-black text-sky-600">{score}</span>
+              <p className="text-sm font-bold text-slate-500 mt-2 uppercase tracking-widest">Global Rank Pending</p>
             </div>
             <Input
-              placeholder="Your Name"
+              placeholder="YOUR NAME"
               value={username}
               onChange={(e) => setUsername(e.target.value)}
-              className="text-center text-lg font-bold"
+              className="text-center text-2xl font-black h-16 rounded-2xl border-2 border-slate-200 focus:border-sky-500 placeholder:text-slate-300"
               maxLength={10}
             />
             <Button 
               onClick={handleSaveScore} 
               disabled={submitScoreMutation.isPending || !username}
-              className="w-full btn-primary"
+              className="w-full py-8 text-2xl font-black rounded-3xl btn-primary"
             >
-              {submitScoreMutation.isPending ? "Saving..." : "Save Score"}
+              {submitScoreMutation.isPending ? "SAVING..." : "SAVE SCORE"}
             </Button>
           </div>
         </DialogContent>
       </Dialog>
     </div>
-  );
-}
-
-function CloudIcon({className, ...props}: React.SVGProps<SVGSVGElement>) {
-  return (
-    <svg viewBox="0 0 24 24" fill="currentColor" className={className} {...props}>
-      <path d="M17.5,19c-3.037,0-5.5-2.463-5.5-5.5c0-0.34,0.032-0.672,0.091-0.995C11.594,12.235,11.056,12,10.5,12 c-2.481,0-4.5,2.019-4.5,4.5c0,0.184,0.017,0.364,0.046,0.54C6.012,17.013,6.006,17.006,6,17.006C2.691,17.006,0,14.315,0,11.006 c0-3.309,2.691-6,6-6c0.418,0,0.824,0.045,1.218,0.126C8.046,2.053,11.176,0,14.5,0c4.136,0,7.5,3.364,7.5,7.5 c0,0.224-0.012,0.444-0.034,0.662C23.116,8.552,24,9.948,24,11.5c0,3.033-2.467,5.5-5.5,5.5c-0.334,0-0.66-0.032-0.978-0.089 C17.513,18.232,17.506,19,17.5,19z"/>
-    </svg>
   );
 }
