@@ -98,3 +98,12 @@
 .animate-float {
   animation: float 6s ease-in-out infinite;
 }
+
+@keyframes progress-fast {
+  0% { width: 0%; }
+  100% { width: 100%; }
+}
+
+.animate-progress-fast {
+  animation: progress-fast 2s linear forwards;
+}
