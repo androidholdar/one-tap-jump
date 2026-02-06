@@ -86,6 +86,8 @@ export default {
         sans: ["var(--font-sans)"],
         serif: ["var(--font-serif)"],
         mono: ["var(--font-mono)"],
+        display: ["'Fredoka'", "var(--font-display)", "sans-serif"],
+        body: ["'Outfit'", "var(--font-body)", "sans-serif"],
       },
       keyframes: {
         "accordion-down": {
