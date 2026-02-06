@@ -2,9 +2,9 @@ import { Info } from "lucide-react";
 
 export function BannerAd() {
   return (
-    <div className="w-full h-16 bg-gray-100 border-t border-gray-200 flex items-center justify-center relative overflow-hidden">
+    <div className="w-full h-20 bg-gray-100 border-t border-gray-200 flex items-center justify-center relative overflow-hidden safe-area-bottom">
       <div className="absolute inset-0 flex items-center justify-center opacity-50">
-        <span className="text-xs font-mono text-gray-400 tracking-widest uppercase">Ad Space</span>
+        <span className="text-xs font-mono text-gray-400 tracking-widest uppercase">Sponsored Content</span>
       </div>
       
       {/* Fake Ad Content */}

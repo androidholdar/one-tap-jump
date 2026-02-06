@@ -36,6 +36,16 @@
     @apply bg-background text-foreground antialiased overflow-hidden select-none touch-none;
     font-family: var(--font-body);
     background-image: linear-gradient(to bottom, #E0F7FA 0%, #FFFFFF 100%);
+    /* Force portrait aspect ratio for the app container */
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+    min-height: -webkit-fill-available;
+  }
+
+  #root {
+    @apply w-full h-full flex justify-center items-center;
   }
 
   h1, h2, h3, h4, h5, h6 {
@@ -47,13 +57,14 @@
 @layer components {
   /* Game Specific Utilities */
   .game-container {
-    @apply relative w-full h-full max-w-md mx-auto overflow-hidden bg-transparent shadow-2xl;
-    /* Simulate mobile screen on desktop */
-    @media (min-width: 768px) {
-      height: 800px;
-      border-radius: 2rem;
-      border: 8px solid white;
-    }
+    @apply relative w-full h-full flex flex-col overflow-hidden bg-transparent shadow-2xl;
+    max-width: 500px;
+    margin: 0 auto;
+    /* Safe Area Padding */
+    padding-top: env(safe-area-inset-top, 0px);
+    padding-right: env(safe-area-inset-right, 0px);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+    padding-left: env(safe-area-inset-left, 0px);
   }
 
   .btn-primary {

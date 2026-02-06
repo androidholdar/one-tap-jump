@@ -66,11 +66,11 @@ export default function Game() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-900 flex items-center justify-center p-0 md:p-4 font-sans">
-      <div className="game-container bg-gradient-to-b from-sky-200 to-white flex flex-col relative">
+    <div className="fixed inset-0 bg-slate-900 flex items-center justify-center p-0 font-sans overflow-hidden">
+      <div className="game-container bg-gradient-to-b from-sky-200 to-white flex flex-col relative h-full w-full">
         
-        {/* Header / HUD */}
-        <div className="absolute top-0 left-0 right-0 z-20 p-4 flex justify-between items-center pointer-events-none">
+        {/* Header / HUD - Safe Area Aware */}
+        <div className="absolute top-0 left-0 right-0 z-20 p-4 pt-8 flex justify-between items-center pointer-events-none">
           {gameState === "PLAYING" ? (
              <div className="flex flex-col">
                <span className="text-4xl font-black text-slate-800 drop-shadow-sm font-display">
@@ -91,7 +91,7 @@ export default function Game() {
         </div>
 
         {/* Game Canvas Layer */}
-        <div className="flex-1 relative overflow-hidden">
+        <div className="flex-1 relative overflow-hidden flex flex-col justify-center items-center">
           {/* Clouds Background Decoration */}
           <div className="absolute top-20 left-10 text-white/40 animate-float pointer-events-none z-0">
              <CloudIcon className="w-24 h-24" />
@@ -113,7 +113,7 @@ export default function Game() {
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
-                className="absolute inset-0 z-30 flex flex-col items-center justify-center bg-white/30 backdrop-blur-sm p-6"
+                className="absolute inset-0 z-30 flex flex-col items-center justify-center bg-white/30 backdrop-blur-sm p-6 pb-32"
               >
                 <motion.div 
                   initial={{ y: 20, opacity: 0 }}
@@ -139,7 +139,7 @@ export default function Game() {
                   </div>
                 </motion.button>
                 
-                <div className="mt-8">
+                <div className="mt-8 flex-1 overflow-auto w-full max-h-[40vh]">
                   <Leaderboard className="scale-90 origin-top" />
                 </div>
               </motion.div>
@@ -149,7 +149,7 @@ export default function Game() {
               <motion.div 
                 initial={{ opacity: 0, scale: 0.9 }}
                 animate={{ opacity: 1, scale: 1 }}
-                className="absolute inset-0 z-30 flex flex-col items-center justify-center bg-black/50 backdrop-blur-sm p-6"
+                className="absolute inset-0 z-30 flex flex-col items-center justify-center bg-black/50 backdrop-blur-sm p-6 pb-32"
               >
                 <div className="bg-white rounded-3xl p-8 w-full max-w-sm text-center shadow-2xl border-4 border-slate-100">
                   <h2 className="text-3xl font-bold text-slate-800 mb-2">Game Over!</h2>
@@ -181,10 +181,12 @@ export default function Game() {
           </AnimatePresence>
         </div>
 
-        {/* Ad Space */}
-        <div className="z-20 relative bg-white">
-          <BannerAd />
-        </div>
+        {/* Ad Space - Always at bottom, dedicated container */}
+        {(gameState === "MENU" || gameState === "GAMEOVER") && (
+          <div className="z-40 relative bg-white mt-auto pb-[env(safe-area-inset-bottom,0px)]">
+            <BannerAd />
+          </div>
+        )}
       </div>
 
       {/* Save Score Dialog */}
