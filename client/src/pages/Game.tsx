@@ -95,9 +95,14 @@ export default function Game() {
         <div className="absolute top-0 left-0 right-0 z-20 p-6 pt-[calc(1.5rem+env(safe-area-inset-top))] flex justify-between items-center pointer-events-none">
           {gameState === "PLAYING" ? (
              <div className="flex flex-col bg-white/20 backdrop-blur-md px-4 py-2 rounded-2xl border border-white/30">
-               <span className="text-3xl font-black text-slate-800 font-display leading-none">
+               <motion.span
+                 key={score}
+                 initial={{ scale: 1.2, color: "#0ea5e9" }}
+                 animate={{ scale: 1, color: "#1e293b" }}
+                 className="text-3xl font-black text-slate-800 font-display leading-none block"
+               >
                  {score}
-               </span>
+               </motion.span>
                <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Score</span>
              </div>
           ) : <div />}
