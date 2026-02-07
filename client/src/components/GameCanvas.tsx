@@ -45,17 +45,32 @@ export function GameCanvas({ onGameOver, onScoreUpdate, isPlaying, reviveTrigger
     const width = canvas.width;
     const height = canvas.height;
     
+    // Generate static clouds for parallax
+    const clouds: Cloud[] = [];
+    for (let i = 0; i < 15; i++) {
+      clouds.push({
+        x: Math.random() * width,
+        y: Math.random() * height * 5 - (height * 2), // Spread over large vertical range
+        size: 40 + Math.random() * 80,
+        opacity: 0.1 + Math.random() * 0.3
+      });
+    }
+
     gameState.current = {
       player: { 
         x: width / 2, 
         y: height - 150, 
         vx: 0, 
-        vy: 0 
+        vy: 0,
+        visualScaleX: 1,
+        visualScaleY: 1
       },
       platforms: [
         // Starting platform
         { id: 0, x: width / 2 - PLATFORM_WIDTH / 2, y: height - 50, vx: 0, type: 'static' }
       ],
+      particles: [],
+      clouds,
       cameraY: 0,
       score: 0,
       width,
@@ -86,6 +101,22 @@ export function GameCanvas({ onGameOver, onScoreUpdate, isPlaying, reviveTrigger
       vx: Math.random() > 0.5 ? speed : -speed,
       type: 'moving'
     });
+  };
+
+  const createParticles = (x: number, y: number, color: string, count: number = 8) => {
+    const state = gameState.current;
+    for (let i = 0; i < count; i++) {
+      state.particles.push({
+        x,
+        y,
+        vx: (Math.random() - 0.5) * 6,
+        vy: (Math.random() - 0.5) * 6,
+        life: 1,
+        maxLife: 0.5 + Math.random() * 0.5,
+        size: 2 + Math.random() * 4,
+        color
+      });
+    }
   };
 
   const jump = () => {
@@ -134,7 +165,7 @@ export function GameCanvas({ onGameOver, onScoreUpdate, isPlaying, reviveTrigger
       }
     });
 
-    // 4. Collision Detection (Only when falling)
+    // 4. Collision Detection
     if (state.player.vy > 0) {
       state.platforms.forEach(p => {
         const playerBottom = state.player.y + PLAYER_SIZE;
@@ -193,8 +224,29 @@ export function GameCanvas({ onGameOver, onScoreUpdate, isPlaying, reviveTrigger
     const state = gameState.current;
     ctx.clearRect(0, 0, state.width, state.height);
     
+    // Draw Background Parallax Clouds
+    ctx.save();
+    ctx.translate(0, -state.cameraY * 0.3);
+    state.clouds.forEach(c => {
+      ctx.globalAlpha = c.opacity;
+      ctx.fillStyle = '#ffffff';
+      drawCloud(ctx, c.x, c.y, c.size);
+    });
+    ctx.restore();
+    ctx.globalAlpha = 1;
+
     ctx.save();
     ctx.translate(0, -state.cameraY);
+
+    // Draw Particles
+    state.particles.forEach(p => {
+      ctx.globalAlpha = p.life;
+      ctx.fillStyle = p.color;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, p.size * p.life, 0, Math.PI * 2);
+      ctx.fill();
+    });
+    ctx.globalAlpha = 1;
 
     // Draw Platforms
     state.platforms.forEach(p => {
@@ -211,6 +263,10 @@ export function GameCanvas({ onGameOver, onScoreUpdate, isPlaying, reviveTrigger
     });
 
     // Draw Player
+    ctx.save();
+    ctx.translate(state.player.x, state.player.y);
+    ctx.scale(state.player.visualScaleX, state.player.visualScaleY);
+
     ctx.beginPath();
     ctx.arc(state.player.x, state.player.y, PLAYER_SIZE, 0, Math.PI * 2);
     const gradient = ctx.createRadialGradient(
@@ -229,6 +285,7 @@ export function GameCanvas({ onGameOver, onScoreUpdate, isPlaying, reviveTrigger
     ctx.arc(state.player.x - 7 + eyeOffset, state.player.y - 4, 3, 0, Math.PI * 2);
     ctx.arc(state.player.x + 7 + eyeOffset, state.player.y - 4, 3, 0, Math.PI * 2);
     ctx.fill();
+    ctx.restore();
 
     ctx.restore();
   };
@@ -271,6 +328,7 @@ export function GameCanvas({ onGameOver, onScoreUpdate, isPlaying, reviveTrigger
     }
 
     return () => {
+      window.removeEventListener('resize', handleResize);
       if (requestRef.current) cancelAnimationFrame(requestRef.current);
     };
   }, [isPlaying]);
