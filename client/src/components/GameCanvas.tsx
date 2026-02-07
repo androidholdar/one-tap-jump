@@ -247,7 +247,8 @@ export function GameCanvas({ onGameOver, onScoreUpdate, isPlaying, reviveTrigger
     state.particles = state.particles.filter(p => p.life > 0);
 
     // 6. Cleanup & Spawning
-    state.platforms = state.platforms.filter(p => p.y < state.cameraY + state.height + 100);
+    // Remove platforms strictly when they go off screen
+    state.platforms = state.platforms.filter(p => p.y < state.cameraY + state.height);
     const highestPlatformY = state.platforms.length > 0
       ? Math.min(...state.platforms.map(p => p.y))
       : state.cameraY + state.height;
@@ -259,8 +260,8 @@ export function GameCanvas({ onGameOver, onScoreUpdate, isPlaying, reviveTrigger
     }
 
     // 7. Game Over
-    // Trigger game over as soon as player falls below the screen
-    if (state.player.y - PLAYER_SIZE > state.cameraY + state.height) {
+    // Trigger game over as soon as player's center passes the bottom edge
+    if (state.player.y > state.cameraY + state.height) {
       state.isDead = true;
       onGameOver(state.score);
     }
@@ -368,8 +369,15 @@ export function GameCanvas({ onGameOver, onScoreUpdate, isPlaying, reviveTrigger
     const canvas = canvasRef.current;
     if (!canvas) return;
 
-    canvas.width = canvas.offsetWidth;
-    canvas.height = canvas.offsetHeight;
+    const handleResize = () => {
+      canvas.width = canvas.offsetWidth;
+      canvas.height = canvas.offsetHeight;
+      gameState.current.width = canvas.width;
+      gameState.current.height = canvas.height;
+    };
+
+    handleResize();
+    window.addEventListener('resize', handleResize);
 
     if (isPlaying) {
       initGame(canvas);
@@ -377,6 +385,7 @@ export function GameCanvas({ onGameOver, onScoreUpdate, isPlaying, reviveTrigger
     }
 
     return () => {
+      window.removeEventListener('resize', handleResize);
       if (requestRef.current) cancelAnimationFrame(requestRef.current);
     };
   }, [isPlaying]);
