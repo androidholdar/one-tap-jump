@@ -10,17 +10,6 @@ const PLAYER_SIZE = 22; // Radius
 const BASE_PLATFORM_GAP_Y = 130;
 const BASE_PLATFORM_SPEED = 2;
 
-interface Particle {
-  x: number;
-  y: number;
-  vx: number;
-  vy: number;
-  life: number;
-  maxLife: number;
-  size: number;
-  color: string;
-}
-
 interface Cloud {
   x: number;
   y: number;
@@ -46,12 +35,9 @@ export function GameCanvas({ onGameOver, onScoreUpdate, isPlaying, reviveTrigger
       x: 0,
       y: 0,
       vx: 0,
-      vy: 0,
-      visualScaleX: 1,
-      visualScaleY: 1
+      vy: 0
     },
     platforms: [] as { id: number; x: number; y: number; vx: number; type: 'static' | 'moving' }[],
-    particles: [] as Particle[],
     clouds: [] as Cloud[],
     cameraY: 0,
     score: 0,
@@ -88,14 +74,11 @@ export function GameCanvas({ onGameOver, onScoreUpdate, isPlaying, reviveTrigger
         x: width / 2, 
         y: height - 150, 
         vx: 0, 
-        vy: 0,
-        visualScaleX: 1,
-        visualScaleY: 1
+        vy: 0
       },
       platforms: [
         { id: 0, x: width / 2 - PLATFORM_WIDTH / 2, y: height - 50, vx: 0, type: 'static' }
       ],
-      particles: [],
       clouds,
       cameraY: 0,
       score: 0,
@@ -129,31 +112,12 @@ export function GameCanvas({ onGameOver, onScoreUpdate, isPlaying, reviveTrigger
     });
   };
 
-  const createParticles = (x: number, y: number, color: string, count: number = 8) => {
-    const state = gameState.current;
-    for (let i = 0; i < count; i++) {
-      state.particles.push({
-        x,
-        y,
-        vx: (Math.random() - 0.5) * 6,
-        vy: (Math.random() - 0.5) * 6,
-        life: 1,
-        maxLife: 0.5 + Math.random() * 0.5,
-        size: 2 + Math.random() * 4,
-        color
-      });
-    }
-  };
-
   const jump = () => {
     const state = gameState.current;
     if (state.isDead || !state.canJump) return;
 
     state.player.vy = JUMP_FORCE;
     state.canJump = false;
-    state.player.visualScaleX = 0.7;
-    state.player.visualScaleY = 1.3;
-    createParticles(state.player.x, state.player.y + PLAYER_SIZE, '#ffffff', 5);
     playJump();
   };
 
@@ -167,10 +131,6 @@ export function GameCanvas({ onGameOver, onScoreUpdate, isPlaying, reviveTrigger
     state.player.vy += GRAVITY;
     state.player.y += state.player.vy;
     state.player.x += state.player.vx;
-
-    // Visual Scaling Recovery
-    state.player.visualScaleX += (1 - state.player.visualScaleX) * 0.2;
-    state.player.visualScaleY += (1 - state.player.visualScaleY) * 0.2;
 
     // Bounce off walls horizontally
     if (state.player.x < PLAYER_SIZE) {
@@ -222,11 +182,6 @@ export function GameCanvas({ onGameOver, onScoreUpdate, isPlaying, reviveTrigger
             state.player.vx = p.vx;
             state.canJump = true;
 
-            // Visual Effect
-            state.player.visualScaleX = 1.4;
-            state.player.visualScaleY = 0.6;
-            createParticles(state.player.x, platformTop, '#fbbf24', 10);
-
             if (state.lastPlatformId !== p.id) {
               state.lastPlatformId = p.id;
               state.score += 1;
@@ -237,14 +192,6 @@ export function GameCanvas({ onGameOver, onScoreUpdate, isPlaying, reviveTrigger
         }
       });
     }
-
-    // 5. Particles Update
-    state.particles.forEach((p, i) => {
-      p.x += p.vx;
-      p.y += p.vy;
-      p.life -= 0.02;
-    });
-    state.particles = state.particles.filter(p => p.life > 0);
 
     // 6. Cleanup & Spawning
     // Remove platforms strictly when they go off screen
@@ -287,16 +234,6 @@ export function GameCanvas({ onGameOver, onScoreUpdate, isPlaying, reviveTrigger
     ctx.save();
     ctx.translate(0, -state.cameraY);
 
-    // Draw Particles
-    state.particles.forEach(p => {
-      ctx.globalAlpha = p.life;
-      ctx.fillStyle = p.color;
-      ctx.beginPath();
-      ctx.arc(p.x, p.y, p.size * p.life, 0, Math.PI * 2);
-      ctx.fill();
-    });
-    ctx.globalAlpha = 1;
-
     // Draw Platforms
     state.platforms.forEach(p => {
       const level = Math.floor(state.score / 10);
@@ -310,7 +247,6 @@ export function GameCanvas({ onGameOver, onScoreUpdate, isPlaying, reviveTrigger
     // Draw Player
     ctx.save();
     ctx.translate(state.player.x, state.player.y);
-    ctx.scale(state.player.visualScaleX, state.player.visualScaleY);
 
     ctx.beginPath();
     ctx.arc(0, 0, PLAYER_SIZE, 0, Math.PI * 2);
@@ -403,7 +339,6 @@ export function GameCanvas({ onGameOver, onScoreUpdate, isPlaying, reviveTrigger
       state.player.vy = 0;
       state.player.vx = highest.vx;
       state.lastPlatformId = highest.id;
-      createParticles(state.player.x, state.player.y, '#ffffff', 20);
     }
   }, [reviveTrigger]);
 
