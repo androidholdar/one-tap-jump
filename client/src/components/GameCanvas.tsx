@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useCallback } from "react";
 import useSound from "use-sound";
 
 // Constants for game physics and rendering
@@ -9,6 +9,24 @@ const PLATFORM_HEIGHT = 20;
 const PLAYER_SIZE = 22; // Radius
 const BASE_PLATFORM_GAP_Y = 130;
 const BASE_PLATFORM_SPEED = 2;
+
+interface Particle {
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  life: number;
+  maxLife: number;
+  size: number;
+  color: string;
+}
+
+interface Cloud {
+  x: number;
+  y: number;
+  size: number;
+  opacity: number;
+}
 
 interface GameCanvasProps {
   onGameOver: (score: number) => void;
@@ -24,8 +42,17 @@ export function GameCanvas({ onGameOver, onScoreUpdate, isPlaying, reviveTrigger
   
   // Game State Refs
   const gameState = useRef({
-    player: { x: 0, y: 0, vx: 0, vy: 0 },
+    player: {
+      x: 0,
+      y: 0,
+      vx: 0,
+      vy: 0,
+      visualScaleX: 1,
+      visualScaleY: 1
+    },
     platforms: [] as { id: number; x: number; y: number; vx: number; type: 'static' | 'moving' }[],
+    particles: [] as Particle[],
+    clouds: [] as Cloud[],
     cameraY: 0,
     score: 0,
     width: 0,
@@ -66,7 +93,6 @@ export function GameCanvas({ onGameOver, onScoreUpdate, isPlaying, reviveTrigger
         visualScaleY: 1
       },
       platforms: [
-        // Starting platform
         { id: 0, x: width / 2 - PLATFORM_WIDTH / 2, y: height - 50, vx: 0, type: 'static' }
       ],
       particles: [],
@@ -125,6 +151,9 @@ export function GameCanvas({ onGameOver, onScoreUpdate, isPlaying, reviveTrigger
 
     state.player.vy = JUMP_FORCE;
     state.canJump = false;
+    state.player.visualScaleX = 0.7;
+    state.player.visualScaleY = 1.3;
+    createParticles(state.player.x, state.player.y + PLAYER_SIZE, '#ffffff', 5);
     playJump();
   };
 
@@ -139,6 +168,10 @@ export function GameCanvas({ onGameOver, onScoreUpdate, isPlaying, reviveTrigger
     state.player.y += state.player.vy;
     state.player.x += state.player.vx;
 
+    // Visual Scaling Recovery
+    state.player.visualScaleX += (1 - state.player.visualScaleX) * 0.2;
+    state.player.visualScaleY += (1 - state.player.visualScaleY) * 0.2;
+
     // Bounce off walls horizontally
     if (state.player.x < PLAYER_SIZE) {
       state.player.x = PLAYER_SIZE;
@@ -148,10 +181,9 @@ export function GameCanvas({ onGameOver, onScoreUpdate, isPlaying, reviveTrigger
       state.player.vx *= -1;
     }
 
-    // 2. Camera Follow (Only goes UP)
+    // 2. Camera Follow
     const targetY = state.player.y;
     const screenCenter = state.cameraY + state.height * 0.6;
-    
     if (targetY < screenCenter) {
       const diff = screenCenter - targetY;
       state.cameraY -= diff;
@@ -168,6 +200,9 @@ export function GameCanvas({ onGameOver, onScoreUpdate, isPlaying, reviveTrigger
     // 4. Collision Detection
     if (state.player.vy > 0) {
       state.platforms.forEach(p => {
+        // Only collide with platforms that are visible on screen
+        if (p.y > state.cameraY + state.height) return;
+
         const playerBottom = state.player.y + PLAYER_SIZE;
         const platformTop = p.y;
         const platformBottom = p.y + PLATFORM_HEIGHT;
@@ -184,8 +219,13 @@ export function GameCanvas({ onGameOver, onScoreUpdate, isPlaying, reviveTrigger
             // Landed!
             state.player.y = platformTop - PLAYER_SIZE;
             state.player.vy = 0;
-            state.player.vx = p.vx; // Move with platform
+            state.player.vx = p.vx;
             state.canJump = true;
+
+            // Visual Effect
+            state.player.visualScaleX = 1.4;
+            state.player.visualScaleY = 0.6;
+            createParticles(state.player.x, platformTop, '#fbbf24', 10);
 
             if (state.lastPlatformId !== p.id) {
               state.lastPlatformId = p.id;
@@ -198,9 +238,17 @@ export function GameCanvas({ onGameOver, onScoreUpdate, isPlaying, reviveTrigger
       });
     }
 
-    // 5. Cleanup & Spawning
-    state.platforms = state.platforms.filter(p => p.y < state.cameraY + state.height + 100);
-    
+    // 5. Particles Update
+    state.particles.forEach((p, i) => {
+      p.x += p.vx;
+      p.y += p.vy;
+      p.life -= 0.02;
+    });
+    state.particles = state.particles.filter(p => p.life > 0);
+
+    // 6. Cleanup & Spawning
+    // Remove platforms strictly when they go off screen
+    state.platforms = state.platforms.filter(p => p.y < state.cameraY + state.height);
     const highestPlatformY = state.platforms.length > 0
       ? Math.min(...state.platforms.map(p => p.y))
       : state.cameraY + state.height;
@@ -211,8 +259,9 @@ export function GameCanvas({ onGameOver, onScoreUpdate, isPlaying, reviveTrigger
       spawnPlatform(highestPlatformY - gap);
     }
 
-    // 6. Game Over Condition
-    if (state.player.y > state.cameraY + state.height + 100) {
+    // 7. Game Over
+    // Trigger game over as soon as player's center passes the bottom edge
+    if (state.player.y > state.cameraY + state.height) {
       state.isDead = true;
       onGameOver(state.score);
     }
@@ -250,14 +299,10 @@ export function GameCanvas({ onGameOver, onScoreUpdate, isPlaying, reviveTrigger
 
     // Draw Platforms
     state.platforms.forEach(p => {
-      // Platform color based on speed/difficulty
       const level = Math.floor(state.score / 10);
       ctx.fillStyle = level > 2 ? '#ef4444' : (level > 0 ? '#10b981' : '#475569');
-
       roundRect(ctx, p.x, p.y, PLATFORM_WIDTH, PLATFORM_HEIGHT, 8);
       ctx.fill();
-      
-      // Top Highlight
       ctx.fillStyle = 'rgba(255,255,255,0.2)';
       ctx.fillRect(p.x + 5, p.y + 2, PLATFORM_WIDTH - 10, 4);
     });
@@ -268,11 +313,8 @@ export function GameCanvas({ onGameOver, onScoreUpdate, isPlaying, reviveTrigger
     ctx.scale(state.player.visualScaleX, state.player.visualScaleY);
 
     ctx.beginPath();
-    ctx.arc(state.player.x, state.player.y, PLAYER_SIZE, 0, Math.PI * 2);
-    const gradient = ctx.createRadialGradient(
-      state.player.x - 5, state.player.y - 5, 2,
-      state.player.x, state.player.y, PLAYER_SIZE
-    );
+    ctx.arc(0, 0, PLAYER_SIZE, 0, Math.PI * 2);
+    const gradient = ctx.createRadialGradient(-5, -5, 2, 0, 0, PLAYER_SIZE);
     gradient.addColorStop(0, '#fbbf24');
     gradient.addColorStop(1, '#f59e0b');
     ctx.fillStyle = gradient;
@@ -282,13 +324,21 @@ export function GameCanvas({ onGameOver, onScoreUpdate, isPlaying, reviveTrigger
     ctx.fillStyle = '#1e293b';
     const eyeOffset = state.player.vx > 0 ? 5 : (state.player.vx < 0 ? -5 : 0);
     ctx.beginPath();
-    ctx.arc(state.player.x - 7 + eyeOffset, state.player.y - 4, 3, 0, Math.PI * 2);
-    ctx.arc(state.player.x + 7 + eyeOffset, state.player.y - 4, 3, 0, Math.PI * 2);
+    ctx.arc(-7 + eyeOffset, -4, 3, 0, Math.PI * 2);
+    ctx.arc(7 + eyeOffset, -4, 3, 0, Math.PI * 2);
     ctx.fill();
     ctx.restore();
 
     ctx.restore();
   };
+
+  function drawCloud(ctx: CanvasRenderingContext2D, x: number, y: number, size: number) {
+    ctx.beginPath();
+    ctx.arc(x, y, size * 0.4, 0, Math.PI * 2);
+    ctx.arc(x + size * 0.3, y - size * 0.1, size * 0.3, 0, Math.PI * 2);
+    ctx.arc(x + size * 0.5, y + size * 0.1, size * 0.3, 0, Math.PI * 2);
+    ctx.fill();
+  }
 
   function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) {
     ctx.beginPath();
@@ -315,12 +365,21 @@ export function GameCanvas({ onGameOver, onScoreUpdate, isPlaying, reviveTrigger
     }
   };
 
+  const handleResize = useCallback(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    canvas.width = canvas.offsetWidth;
+    canvas.height = canvas.offsetHeight;
+    gameState.current.width = canvas.width;
+    gameState.current.height = canvas.height;
+  }, []);
+
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
 
-    canvas.width = canvas.offsetWidth;
-    canvas.height = canvas.offsetHeight;
+    handleResize();
+    window.addEventListener('resize', handleResize);
 
     if (isPlaying) {
       initGame(canvas);
@@ -331,20 +390,20 @@ export function GameCanvas({ onGameOver, onScoreUpdate, isPlaying, reviveTrigger
       window.removeEventListener('resize', handleResize);
       if (requestRef.current) cancelAnimationFrame(requestRef.current);
     };
-  }, [isPlaying]);
+  }, [isPlaying, handleResize]);
 
   useEffect(() => {
     if (reviveTrigger && gameState.current.isDead) {
       const state = gameState.current;
       state.isDead = false;
       state.canJump = true;
-      // Put player on the highest platform
       const highest = state.platforms.reduce((prev, curr) => (prev.y < curr.y) ? prev : curr);
       state.player.y = highest.y - PLAYER_SIZE;
       state.player.x = highest.x + PLATFORM_WIDTH / 2;
       state.player.vy = 0;
       state.player.vx = highest.vx;
       state.lastPlatformId = highest.id;
+      createParticles(state.player.x, state.player.y, '#ffffff', 20);
     }
   }, [reviveTrigger]);
 
